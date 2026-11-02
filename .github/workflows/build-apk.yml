@@ -35,27 +35,46 @@ jobs:
           npx cap init "Quick Sketch" "com.sketch.app" --web-dir www
           npx cap add android
 
-          # Explicitly convert icon-512.png directly to all Android mipmap dimensions
           RES_DIR="android/app/src/main/res"
-          
-          convert icon-512.png -resize 48x48   $RES_DIR/mipmap-mdpi/ic_launcher.png
-          convert icon-512.png -resize 72x72   $RES_DIR/mipmap-hdpi/ic_launcher.png
-          convert icon-512.png -resize 96x96   $RES_DIR/mipmap-xhdpi/ic_launcher.png
-          convert icon-512.png -resize 144x144 $RES_DIR/mipmap-xxhdpi/ic_launcher.png
-          convert icon-512.png -resize 192x192 $RES_DIR/mipmap-xxxhdpi/ic_launcher.png
 
-          convert icon-512.png -resize 48x48   $RES_DIR/mipmap-mdpi/ic_launcher_round.png
-          convert icon-512.png -resize 72x72   $RES_DIR/mipmap-hdpi/ic_launcher_round.png
-          convert icon-512.png -resize 96x96   $RES_DIR/mipmap-xhdpi/ic_launcher_round.png
-          convert icon-512.png -resize 144x144 $RES_DIR/mipmap-xxhdpi/ic_launcher_round.png
-          convert icon-512.png -resize 192x192 $RES_DIR/mipmap-xxxhdpi/ic_launcher_round.png
+          # 1. Update legacy PNG icons
+          for density in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            dir="${density%%:*}"
+            size="${density##*:}"
+            convert icon-512.png -resize "${size}x${size}" "$RES_DIR/mipmap-$dir/ic_launcher.png"
+            convert icon-512.png -resize "${size}x${size}" "$RES_DIR/mipmap-$dir/ic_launcher_round.png"
+          done
 
-          # Overwrite foreground adaptive icons as well
-          convert icon-512.png -resize 108x108 $RES_DIR/mipmap-mdpi/ic_launcher_foreground.png 2>/dev/null || true
-          convert icon-512.png -resize 162x162 $RES_DIR/mipmap-hdpi/ic_launcher_foreground.png 2>/dev/null || true
-          convert icon-512.png -resize 216x216 $RES_DIR/mipmap-xhdpi/ic_launcher_foreground.png 2>/dev/null || true
-          convert icon-512.png -resize 324x324 $RES_DIR/mipmap-xxhdpi/ic_launcher_foreground.png 2>/dev/null || true
-          convert icon-512.png -resize 432x432 $RES_DIR/mipmap-xxxhdpi/ic_launcher_foreground.png 2>/dev/null || true
+          # 2. Modern Android Adaptive Icons: replace foreground with your logo padded to 432x432
+          mkdir -p "$RES_DIR/drawable"
+          mkdir -p "$RES_DIR/drawable-v24"
+          convert icon-512.png -resize 280x280 -gravity center -background none -extent 432x432 "$RES_DIR/drawable/ic_launcher_foreground.png"
+          cp "$RES_DIR/drawable/ic_launcher_foreground.png" "$RES_DIR/drawable-v24/ic_launcher_foreground.png" 2>/dev/null || true
+
+          # Set adaptive background to clean white
+          cat << 'XML' > "$RES_DIR/values/ic_launcher_background.xml"
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#FFFFFF</color>
+          </resources>
+          XML
+
+          # Point anydpi XML explicitly to the foreground png
+          for xml_dir in "$RES_DIR/mipmap-anydpi-v26"; do
+            mkdir -p "$xml_dir"
+            cat << 'XML' > "$xml_dir/ic_launcher.xml"
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/ic_launcher_background"/>
+              <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+          </adaptive-icon>
+          XML
+            cp "$xml_dir/ic_launcher.xml" "$xml_dir/ic_launcher_round.xml"
+          done
+
+          # 3. Bump versionCode and versionName in build.gradle
+          sed -i 's/versionCode 1/versionCode 2/' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "1.0.1"/' android/app/build.gradle
 
           npx cap sync android
           cd android
