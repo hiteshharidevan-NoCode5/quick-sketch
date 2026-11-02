@@ -4,11 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
   <title>Quick Sketch</title>
-  <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#ffffff">
   <style>
     * { box-sizing: border-box; touch-action: none; margin: 0; padding: 0; user-select: none; }
-    body, html { width: 100%; height: 100%; overflow: hidden; background: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #ffffff; font-family: -apple-system, sans-serif; }
     #toolbar {
       position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
       background: rgba(245, 245, 247, 0.95); backdrop-filter: blur(10px);
@@ -45,7 +44,7 @@
 
   <script>
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d');
     const colorPicker = document.getElementById('colorPicker');
     const eraserBtn = document.getElementById('eraserBtn');
     const undoBtn = document.getElementById('undoBtn');
@@ -57,11 +56,12 @@
     let isEraser = false;
     let history = [];
     let redoStack = [];
-    const MAX_HISTORY = 30;
+    let lastX = 0;
+    let lastY = 0;
 
     function saveState() {
-      if (history.length >= MAX_HISTORY) history.shift();
-      history.push(canvas.toDataURL());
+      if (history.length >= 25) history.shift();
+      history.push(canvas.toDataURL('image/png'));
       redoStack = [];
       updateButtons();
     }
@@ -80,65 +80,69 @@
       img.src = url;
     }
 
-    function resize() {
-      const prevData = history.length > 0 ? history[history.length - 1] : null;
+    function initCanvas() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-
-      if (prevData) {
-        restoreState(prevData);
-      } else {
-        saveState();
-      }
+      saveState();
     }
-    window.addEventListener('resize', resize);
+
+    function getCoords(e) {
+      if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+      return { x: e.clientX, y: e.clientY };
+    }
 
     function startDraw(e) {
       painting = true;
-      draw(e);
-    }
-
-    function endDraw() {
-      if (painting) {
-        painting = false;
-        ctx.beginPath();
-        saveState();
-      }
+      const coords = getCoords(e);
+      lastX = coords.x;
+      lastY = coords.y;
     }
 
     function draw(e) {
-      const x = e.clientX || (e.touches && e.touches[0].clientX);
-      const y = e.clientY || (e.touches && e.touches[0].clientY);
+      const coords = getCoords(e);
+
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(coords.x, coords.y);
 
       if (isEraser) {
+        // Direct erase to white background
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 26;
+        ctx.lineWidth = 32;
       } else {
         ctx.strokeStyle = colorPicker.value;
         ctx.lineWidth = 4;
       }
 
-      ctx.lineTo(x, y);
       ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(x, y);
+      lastX = coords.x;
+      lastY = coords.y;
+    }
+
+    function endDraw() {
+      if (painting) {
+        painting = false;
+        saveState();
+      }
     }
 
     canvas.addEventListener('mousedown', startDraw);
-    canvas.addEventListener('mouseup', endDraw);
     canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', endDraw);
 
-    canvas.addEventListener('touchstart', startDraw, { passive: false });
-    canvas.addEventListener('touchend', endDraw);
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDraw(e); }, { passive: false });
     canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); }, { passive: false });
+    canvas.addEventListener('touchend', (e) => { e.preventDefault(); endDraw(); }, { passive: false });
 
     eraserBtn.addEventListener('click', () => {
       eraserBtn.classList.toggle('active', isEraser);
-      eraserBtn.textContent = isEraser ? 'Pen' : 'Eraser';
+      eraserBtn.textContent = isEraser ? 'Pen Mode' : 'Eraser';
     });
 
     colorPicker.addEventListener('input', () => {
@@ -170,38 +174,41 @@
       saveState();
     });
 
-    saveBtn.addEventListener('click', async () => {
-      const dataUrl = canvas.toDataURL('image/png');
-      const filename = 'sketch-' + Date.now() + '.png';
+    // Native-compatible Blob downloader
+    saveBtn.addEventListener('click', () => {
+      canvas.toBlob((blob) => {
+        const filename = 'sketch-' + Date.now() + '.png';
 
-      if (navigator.canShare && window.File) {
-        try {
-          const blob = await (await fetch(dataUrl)).blob();
-          const file = new File([blob], filename, { type: 'image/png' });
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              title: 'Quick Sketch',
-              text: 'My sketch'
-            });
-            return;
-          }
-        } catch (_) {}
-      }
+        // Check if Web Share API with File support works
+        if (navigator.canShare && window.File) {
+          try {
+            const file = new File([blob], filename, { type: 'image/png' });
+            if (navigator.canShare({ files: [file] })) {
+              navigator.share({
+                files: [file],
+                title: 'Quick Sketch'
+              }).catch(() => {});
+              return;
+            }
+          } catch (_) {}
+        }
 
-      const a = document.createElement('a');
-      a.download = filename;
-      a.href = dataUrl;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+        // Direct Object URL download fallback
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }, 1000);
+      }, 'image/png');
     });
 
-    resize();
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js');
-    }
+    initCanvas();
   </script>
 </body>
 </html>
