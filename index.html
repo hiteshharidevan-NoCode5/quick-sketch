@@ -170,7 +170,6 @@
       saveState();
     });
 
-    // Native immediate save & sharing
     saveBtn.addEventListener('click', async () => {
       const dataUrl = canvas.toDataURL('image/png');
       const filename = 'sketch-' + Date.now() + '.png';
