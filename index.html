@@ -8,62 +8,120 @@
   <meta name="theme-color" content="#ffffff">
   <style>
     * { box-sizing: border-box; touch-action: none; margin: 0; padding: 0; user-select: none; }
-    body, html { width: 100%; height: 100%; overflow: hidden; background: #fff; font-family: sans-serif; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     #toolbar {
-      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-      background: #f1f3f4; border-radius: 24px; padding: 6px 14px;
-      display: flex; gap: 10px; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      z-index: 10;
+      position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+      background: rgba(245, 245, 247, 0.95); backdrop-filter: blur(10px);
+      border-radius: 28px; padding: 6px 12px;
+      display: flex; gap: 6px; align-items: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      z-index: 10; max-width: 96vw; overflow-x: auto;
     }
-    input[type="color"] { border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; background: none; }
+    input[type="color"] {
+      border: 2px solid #ccc; width: 28px; height: 28px; border-radius: 50%;
+      cursor: pointer; background: none; padding: 0; outline: none; flex-shrink: 0;
+    }
     button {
-      border: none; background: #fff; padding: 6px 12px; border-radius: 14px;
-      font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: none; background: #ffffff; padding: 7px 11px; border-radius: 16px;
+      font-size: 12px; font-weight: 600; cursor: pointer; color: #1c1c1e;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; flex-shrink: 0;
     }
-    button:active { background: #e0e0e0; }
+    button:active { background: #e5e5ea; transform: scale(0.96); }
+    button.active { background: #008080; color: #ffffff; }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
     canvas { display: block; width: 100vw; height: 100vh; background: #ffffff; }
   </style>
 </head>
 <body>
   <div id="toolbar">
-    <input type="color" id="colorPicker" value="#1a1a1a">
+    <input type="color" id="colorPicker" value="#008080">
+    <button id="eraserBtn">Eraser</button>
+    <button id="undoBtn" disabled>↶ Before</button>
+    <button id="redoBtn" disabled>↷ After</button>
     <button id="clearBtn">Clear</button>
-    <button id="saveBtn">Save PNG</button>
+    <button id="saveBtn" style="background: #008080; color: #fff;">Save PNG</button>
   </div>
   <canvas id="canvas"></canvas>
 
   <script>
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const colorPicker = document.getElementById('colorPicker');
+    const eraserBtn = document.getElementById('eraserBtn');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const saveBtn = document.getElementById('saveBtn');
+
     let painting = false;
+    let isEraser = false;
+    let history = [];
+    let redoStack = [];
+    const MAX_HISTORY = 30;
+
+    function saveState() {
+      if (history.length >= MAX_HISTORY) history.shift();
+      history.push(canvas.toDataURL());
+      redoStack = [];
+      updateButtons();
+    }
+
+    function updateButtons() {
+      undoBtn.disabled = history.length <= 1;
+      redoBtn.disabled = redoStack.length === 0;
+    }
+
+    function restoreState(url) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+      };
+      img.src = url;
+    }
 
     function resize() {
+      const prevData = history.length > 0 ? history[history.length - 1] : null;
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = colorPicker.value;
+
+      if (prevData) {
+        restoreState(prevData);
+      } else {
+        saveState();
+      }
     }
     window.addEventListener('resize', resize);
-    resize();
 
     function startDraw(e) {
       painting = true;
       draw(e);
     }
+
     function endDraw() {
-      painting = false;
-      ctx.beginPath();
+      if (painting) {
+        painting = false;
+        ctx.beginPath();
+        saveState();
+      }
     }
+
     function draw(e) {
-      if (!painting) return;
       const x = e.clientX || (e.touches && e.touches[0].clientX);
       const y = e.clientY || (e.touches && e.touches[0].clientY);
-      ctx.strokeStyle = colorPicker.value;
+
+      if (isEraser) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 26;
+      } else {
+        ctx.strokeStyle = colorPicker.value;
+        ctx.lineWidth = 4;
+      }
+
       ctx.lineTo(x, y);
       ctx.stroke();
       ctx.beginPath();
@@ -78,17 +136,69 @@
     canvas.addEventListener('touchend', endDraw);
     canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); }, { passive: false });
 
-    document.getElementById('clearBtn').addEventListener('click', () => {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    eraserBtn.addEventListener('click', () => {
+      eraserBtn.classList.toggle('active', isEraser);
+      eraserBtn.textContent = isEraser ? 'Pen' : 'Eraser';
     });
 
-    document.getElementById('saveBtn').addEventListener('click', () => {
-      const link = document.createElement('a');
-      link.download = `sketch-${Date.now()}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+    colorPicker.addEventListener('input', () => {
+      isEraser = false;
+      eraserBtn.classList.remove('active');
+      eraserBtn.textContent = 'Eraser';
     });
+
+    undoBtn.addEventListener('click', () => {
+      if (history.length > 1) {
+        redoStack.push(history.pop());
+        restoreState(history[history.length - 1]);
+        updateButtons();
+      }
+    });
+
+    redoBtn.addEventListener('click', () => {
+      if (redoStack.length > 0) {
+        const state = redoStack.pop();
+        history.push(state);
+        restoreState(state);
+        updateButtons();
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      saveState();
+    });
+
+    // Native immediate save & sharing
+    saveBtn.addEventListener('click', async () => {
+      const dataUrl = canvas.toDataURL('image/png');
+      const filename = 'sketch-' + Date.now() + '.png';
+
+      if (navigator.canShare && window.File) {
+        try {
+          const blob = await (await fetch(dataUrl)).blob();
+          const file = new File([blob], filename, { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: 'Quick Sketch',
+              text: 'My sketch'
+            });
+            return;
+          }
+        } catch (_) {}
+      }
+
+      const a = document.createElement('a');
+      a.download = filename;
+      a.href = dataUrl;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+
+    resize();
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js');
