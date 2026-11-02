@@ -24,19 +24,24 @@ jobs:
 
       - name: Build APK via Capacitor
         run: |
-          mkdir -p www
+          mkdir -p www assets
           cp index.html manifest.json sw.js icon-512.png www/
+          cp icon-512.png assets/icon-only.png
+          cp icon-512.png assets/icon-foreground.png
+          cp icon-512.png assets/icon-background.png
           npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/assets
           npx cap init "Quick Sketch" "com.sketch.app" --web-dir www
           npx cap add android
+          npx @capacitor/assets generate --android || true
           npx cap sync android
           cd android
           chmod +x ./gradlew
           ./gradlew assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk ../QuickSketch.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: quick-sketch-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: QuickSketch-APK
+          path: QuickSketch.apk
