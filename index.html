@@ -14,7 +14,7 @@
       display: flex; gap: 6px; align-items: center; z-index: 100; box-shadow: 0 3px 12px rgba(0,0,0,0.15);
     }
     input[type="color"] { width: 28px; height: 28px; border: none; border-radius: 50%; cursor: pointer; background: none; }
-    button {
+    button,select{
       border: none; background: #ffffff; padding: 7px 12px; border-radius: 14px;
       font-size: 12px; font-weight: 600; cursor: pointer; color: #1c1c1e;
     }
@@ -27,13 +27,13 @@
     }
     #previewModal img { max-width: 85vw; max-height: 70vh; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
     #previewModal p { color: #fff; margin-top: 12px; font-size: 14px; }
-    #previewModal button { margin-top: 15px; background: #008080; color: #fff; padding: 10px 20px; border-radius: 20px; }
+    #previewModal button,select{ margin-top: 15px; background: #008080; color: #fff; padding: 10px 20px; border-radius: 20px; }
   </style>
 </head>
 <body>
   <div id="toolbar">
     <input type="color" id="colorPicker" value="#008080">
-    <button id="eraserBtn">Eraser</button>
+    <select id="sizeSelect"><option value="2">Fine</option><option value="4" selected>Med</option><option value="10">Bold</option></select><button id="themeBtn">🌓</button><button id="eraserBtn">Eraser</button>
     <button id="undoBtn" disabled>↖+ Before</button>
     <button id="redoBtn" disabled>↻, After</button>
     <button id="clearBtn">Clear</button>
@@ -60,7 +60,8 @@
     const previewImg = document.getElementById('previewImg');
     const closeModal = document.getElementById('closeModal');
 
-    let isDrawing = false;
+    let isDark=false;const sizeSelect=document.getElementById("sizeSelect"),themeBtn=document.getElementById("themeBtn");function getBg(){return isDark?"#121212":"#ffffff";}
+let isDrawing = false;
     let isEraser = false;
     let lastX = 0, lastY = 0;
     let history = [];
@@ -90,7 +91,7 @@
     function setupFactory() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle=getBg();
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       saveState();
     }
@@ -116,11 +117,10 @@
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       if (isEraser) {
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 38;
+        ctx.strokeStyle=getBg();ctx.lineWidth=38;
       } else {
         ctx.strokeStyle = colorPicker.value;
-        ctx.lineWidth = 4;
+        ctx.lineWidth=parseInt(sizeSelect.value)||4;
       }
       ctx.moveTo(lastX, lastY);
       ctx.lineTo(pos.x, pos.y);
@@ -172,8 +172,9 @@
       }
     };
 
+    themeBtn.onclick=()=>{isDark=!isDark;themeBtn.textContent=isDark?"☀️":"🌓";document.body.style.background=getBg();const d=ctx.getImageData(0,0,canvas.width,canvas.height);for(let i=0;i<d.data.length;i+=4){d.data[i]=255-d.data[i];d.data[i+1]=255-d.data[i+1];d.data[i+2]=255-d.data[i+2];}ctx.putImageData(d,0,0);saveState();};
     clearBtn.onclick = () => {
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle=getBg();
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       saveState();
     };
