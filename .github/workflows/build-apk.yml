@@ -25,10 +25,10 @@ jobs:
       - name: Build APK via Capacitor
         run: |
           mkdir -p www
-          cp index.html manifest.json sw.js icon-512.png www/
+          cp index.html manifest.json icon-512.png www/
 
           npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/filesystem @capacitor/share
 
           npx cap init "Quick Sketch" "com.sketch.app" --web-dir www
           npx cap add android
@@ -48,8 +48,14 @@ jobs:
           </resources>
           XML
 
-          sed -i 's/versionCode 7/versionCode 7/g' android/app/build.gradle
-          sed -i 's/versionName "1.0.6"/versionName "1.0.6"/g' android/app/build.gradle
+          # Add storage permissions to AndroidManifest.xml
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i '/<application/i <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' $MANIFEST
+          sed -i '/<application/i <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' $MANIFEST
+
+          # Bump version to 8 / 1.0.7
+          sed -i 's/versionCode 1/versionCode 8/g' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "1.0.7"/g' android/app/build.gradle
 
           npx cap sync android
           cd android
