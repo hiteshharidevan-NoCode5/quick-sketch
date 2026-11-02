@@ -22,18 +22,41 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Install ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+
       - name: Build APK via Capacitor
         run: |
-          mkdir -p www assets
+          mkdir -p www
           cp index.html manifest.json sw.js icon-512.png www/
-          cp icon-512.png assets/icon-only.png
-          cp icon-512.png assets/icon-foreground.png
-          cp icon-512.png assets/icon-background.png
+
           npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/assets
+          npm install @capacitor/core @capacitor/cli @capacitor/android
           npx cap init "Quick Sketch" "com.sketch.app" --web-dir www
           npx cap add android
-          npx @capacitor/assets generate --android || true
+
+          # Explicitly convert icon-512.png directly to all Android mipmap dimensions
+          RES_DIR="android/app/src/main/res"
+          
+          convert icon-512.png -resize 48x48   $RES_DIR/mipmap-mdpi/ic_launcher.png
+          convert icon-512.png -resize 72x72   $RES_DIR/mipmap-hdpi/ic_launcher.png
+          convert icon-512.png -resize 96x96   $RES_DIR/mipmap-xhdpi/ic_launcher.png
+          convert icon-512.png -resize 144x144 $RES_DIR/mipmap-xxhdpi/ic_launcher.png
+          convert icon-512.png -resize 192x192 $RES_DIR/mipmap-xxxhdpi/ic_launcher.png
+
+          convert icon-512.png -resize 48x48   $RES_DIR/mipmap-mdpi/ic_launcher_round.png
+          convert icon-512.png -resize 72x72   $RES_DIR/mipmap-hdpi/ic_launcher_round.png
+          convert icon-512.png -resize 96x96   $RES_DIR/mipmap-xhdpi/ic_launcher_round.png
+          convert icon-512.png -resize 144x144 $RES_DIR/mipmap-xxhdpi/ic_launcher_round.png
+          convert icon-512.png -resize 192x192 $RES_DIR/mipmap-xxxhdpi/ic_launcher_round.png
+
+          # Overwrite foreground adaptive icons as well
+          convert icon-512.png -resize 108x108 $RES_DIR/mipmap-mdpi/ic_launcher_foreground.png 2>/dev/null || true
+          convert icon-512.png -resize 162x162 $RES_DIR/mipmap-hdpi/ic_launcher_foreground.png 2>/dev/null || true
+          convert icon-512.png -resize 216x216 $RES_DIR/mipmap-xhdpi/ic_launcher_foreground.png 2>/dev/null || true
+          convert icon-512.png -resize 324x324 $RES_DIR/mipmap-xxhdpi/ic_launcher_foreground.png 2>/dev/null || true
+          convert icon-512.png -resize 432x432 $RES_DIR/mipmap-xxxhdpi/ic_launcher_foreground.png 2>/dev/null || true
+
           npx cap sync android
           cd android
           chmod +x ./gradlew
