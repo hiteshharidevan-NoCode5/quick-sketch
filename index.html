@@ -1,214 +1,179 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-  <title>Quick Sketch</title>
-  <meta name="theme-color" content="#ffffff">
-  <style>
-    * { box-sizing: border-box; touch-action: none; margin: 0; padding: 0; user-select: none; }
-    body, html { width: 100%; height: 100%; overflow: hidden; background: #ffffff; font-family: -apple-system, sans-serif; }
-    #toolbar {
-      position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-      background: rgba(245, 245, 247, 0.95); backdrop-filter: blur(10px);
-      border-radius: 28px; padding: 6px 12px;
-      display: flex; gap: 6px; align-items: center;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-      z-index: 10; max-width: 96vw; overflow-x: auto;
-    }
-    input[type="color"] {
-      border: 2px solid #ccc; width: 28px; height: 28px; border-radius: 50%;
-      cursor: pointer; background: none; padding: 0; outline: none; flex-shrink: 0;
-    }
-    button {
-      border: none; background: #ffffff; padding: 7px 11px; border-radius: 16px;
-      font-size: 12px; font-weight: 600; cursor: pointer; color: #1c1c1e;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; flex-shrink: 0;
-    }
-    button:active { background: #e5e5ea; transform: scale(0.96); }
-    button.active { background: #008080; color: #ffffff; }
-    button:disabled { opacity: 0.35; cursor: not-allowed; }
-    canvas { display: block; width: 100vw; height: 100vh; background: #ffffff; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+<title>Quick Sketch</title>
+<meta name="theme-color" content="#ffffff">
+<style>
+  * { box-sizing: border-box; -webkit-user-select: none; margin: 0; padding: 0; }
+  body, html { width: 100%; height: 100%; overflow: hidden; background: #ffffff; position: fixed; touch-action: none; }
+  #toolbar {
+    position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+    background: rgba(245, 245, 247, 0.96); border-radius: 28px; padding: 6px 12px;
+    display: flex; gap: 6px; align-items: center; z-index: 100; box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+  }
+  input[type="color"] { width: 28px; height: 28px; border: none; border-radius: 50%; cursor: pointer; background: none; }
+  button {
+    border: none; background: #ffffff; padding: 7px 12px; border-radius: 14px;
+    font-size: 12px; font-weight: 600; cursor: pointer; color: #1c1c1e;
+  }
+  button.active { background: #008080 !important; color: #ffffff !important; }
+  button:disabled { opacity: 0.35; }
+  canvas { display: block; width: 100vw; height: 100vh; background: #ffffff; }
+</style>
 </head>
 <body>
-  <div id="toolbar">
-    <input type="color" id="colorPicker" value="#008080">
-    <button id="eraserBtn">Eraser</button>
-    <button id="undoBtn" disabled>â†¶ Before</button>
-    <button id="redoBtn" disabled>â†· After</button>
-    <button id="clearBtn">Clear</button>
-    <button id="saveBtn" style="background: #008080; color: #fff;">Save PNG</button>
-  </div>
-  <canvas id="canvas"></canvas>
+<div id="toolbar">
+  <input type="color" id="colorPicker" value="#008080">
+  <button id="eraserBtn">Eraser</button>
+  <button id="undoBtn" disabled>â†Ö Before</button>
+  <button id="redoBtn" disabled>â†· After</button>
+  <button id="clearBtn">Clear</button>
+  <button id="saveBtn" style="background: #008080; color: #fff;">Save PNG</button>
+</div>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const colorPicker = document.getElementById('colorPicker');
+const eraserBtn = document.getElementById('eraserBtn');
+const undoBtn = document.getElementById('undoBtn');
+const redoBtn = document.getElementById('redoBtn');
+const clearBtn = document.getElementById('clearBtn');
+const saveBtn = document.getElementById('saveBtn');
 
-  <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const colorPicker = document.getElementById('colorPicker');
-    const eraserBtn = document.getElementById('eraserBtn');
-    const undoBtn = document.getElementById('undoBtn');
-    const redoBtn = document.getElementById('redoBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const saveBtn = document.getElementById('saveBtn');
+let painting = false, isEraser = false, history = [], redoStack = [];
+let lastX = 0, lastY = 0;
 
-    let painting = false;
-    let isEraser = false;
-    let history = [];
-    let redoStack = [];
-    let lastX = 0;
-    let lastY = 0;
+function updateButtons() {
+  undoBtn.disabled = history.length <= 1;
+  redoBtn.disabled = redoStack.length === 0;}
 
-    function saveState() {
-      if (history.length >= 25) history.shift();
-      history.push(canvas.toDataURL('image/png'));
-      redoStack = [];
-      updateButtons();
-    }
+function saveState() {
+  if (history.length >= 30) history.shift();
+  history.push(canvas.toDataURL());
+  redoStack = [];
+  updateButtons();
+}
 
-    function updateButtons() {
-      undoBtn.disabled = history.length <= 1;
-      redoBtn.disabled = redoStack.length === 0;
-    }
+function restoreState(url) {
+  const img = new Image();
+  img.onload = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+  };
+  img.src = url;
+}
 
-    function restoreState(url) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-      };
-      img.src = url;
-    }
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  saveState();
+}
+resize();
 
-    function initCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      saveState();
-    }
+function getPos(e) {
+  const t = (e.touches && e.touches[0]) ? e.touches[0] : e;
+  return { x: t.clientX, y: t.clientY };
+}
 
-    function getCoords(e) {
-      if (e.touches && e.touches.length > 0) {
-        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      }
-      return { x: e.clientX, y: e.clientY };
-    }
+function startLine(e) {
+  painting = true;
+  const p = getPos(e);
+  lastX = p.x; lastY = p.y;
+  drawLine(e);
+}
 
-    function startDraw(e) {
-      painting = true;
-      const coords = getCoords(e);
-      lastX = coords.x;
-      lastY = coords.y;
-    }
+function drawLine(e) {
+  if (!painting) return;
+  const p = getPos(e);
+  ctx.save();
+  ctx.beginPath();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (isEraser) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 36;
+  } else {
+    ctx.strokeStyle = colorPicker.value;
+    ctx.lineWidth = 4;
+  }
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+  ctx.restore();
+  lastX = p.x; lastY = p.y;
+}
 
-    function draw(e) {
-      const coords = getCoords(e);
+function stopLine() {
+  if (painting) {
+    painting = false;
+    saveState();
+  }
+}
 
-      ctx.beginPath();
-      ctx.moveTo(lastX, lastY);
-      ctx.lineTo(coords.x, coords.y);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); startLine(e); }, { passive: false });
+canvas.addEventListener('touchmove', e => { e.preventDefault(); drawLine(e); }, { passive: false });
+canvas.addEventListener('touchend', e => { e.preventDefault(); stopLine(); }, { passive: false });
+canvas.addEventListener('mousedown', startLine);
+canvas.addEventListener('mousemove', drawLine);
+canvas.addEventListener('mouseup', stopLine);
 
-      if (isEraser) {
-        // Direct erase to white background
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 32;
-      } else {
-        ctx.strokeStyle = colorPicker.value;
-        ctx.lineWidth = 4;
-      }
+eraserBtn.onclick = () => {
+  isEraser = !isEraser;
+  eraserBtn.classList.toggle('active', isEraser);
+  eraserBtn.textContent = isEraser ? 'Pen' : 'Eraser';
+};
 
-      ctx.stroke();
-      lastX = coords.x;
-      lastY = coords.y;
-    }
+colorPicker.oninput = () => {
+  isEraser = false;
+  eraserBtn.classList.remove('active');
+  eraserBtn.textContent = 'Eraser';
+};
 
-    function endDraw() {
-      if (painting) {
-        painting = false;
-        saveState();
-      }
-    }
+undoBtn.onclick = () => {
+  if (history.length > 1) {
+    redoStack.push(history.pop());
+    restoreState(history[history.length - 1]);
+    updateButtons();
+  }
+};
 
-    canvas.addEventListener('mousedown', startDraw);
-    canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', endDraw);
+redoBtn.onclick = () => {
+  if (rdoStack.length > 0) {
+    const st = redoStack.pop();
+    history.push(st);
+    restoreState(st);
+    updateButtons();
+  }
+};
 
-    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDraw(e); }, { passive: false });
-    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); }, { passive: false });
-    canvas.addEventListener('touchend', (e) => { e.preventDefault(); endDraw(); }, { passive: false });
-
-    eraserBtn.addEventListener('click', () => {
-      eraserBtn.classList.toggle('active', isEraser);
-      eraserBtn.textContent = isEraser ? 'Pen Mode' : 'Eraser';
-    });
-
-    colorPicker.addEventListener('input', () => {
-      isEraser = false;
-      eraserBtn.classList.remove('active');
-      eraserBtn.textContent = 'Eraser';
-    });
-
-    undoBtn.addEventListener('click', () => {
-      if (history.length > 1) {
-        redoStack.push(history.pop());
-        restoreState(history[history.length - 1]);
-        updateButtons();
-      }
-    });
-
-    redoBtn.addEventListener('click', () => {
-      if (redoStack.length > 0) {
-        const state = redoStack.pop();
-        history.push(state);
-        restoreState(state);
-        updateButtons();
-      }
-    });
-
-    clearBtn.addEventListener('click', () => {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      saveState();
-    });
-
-    // Native-compatible Blob downloader
-    saveBtn.addEventListener('click', () => {
-      canvas.toBlob((blob) => {
-        const filename = 'sketch-' + Date.now() + '.png';
-
-        // Check if Web Share API with File support works
-        if (navigator.canShare && window.File) {
-          try {
-            const file = new File([blob], filename, { type: 'image/png' });
-            if (navigator.canShare({ files: [file] })) {
-              navigator.share({
-                files: [file],
-                title: 'Quick Sketch'
-              }).catch(() => {});
-              return;
-            }
-          } catch (_) {}
-        }
-
-        // Direct Object URL download fallback
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        }, 1000);
-      }, 'image/png');
-    });
-
-    initCanvas();
-  </script>
+clearBtn.onclick = () => {
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  saveState();
+};
+saveBtn.onclick = async () => {
+  const dataUrl = canvas.toDataURL('image/png');
+  const filename = 'sketch-' + Date.now() + '.png';
+  if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+    try {
+      const b64 = dataUrl.split(',')[1];
+      const file = await window.Capacitor.Plugins.Filesystem.writeFile({ path: filename, data: b64, directory: 'CACHE' });
+      await window.Capacitor.Plugins.Share.share({ title: 'Quick Sketch', url: file.uri });
+      return;
+    } catch (err) {}
+  }
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+</script>
 </body>
 </html>
